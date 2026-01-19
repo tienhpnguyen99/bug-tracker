@@ -48,7 +48,6 @@ pipeline {
 
                 stage('Unit Test - Frontend') {
                     agent any
-                    }
                     steps {
                         dir('bugtracker-frontend') {
                             sh '''
