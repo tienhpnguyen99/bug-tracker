@@ -47,11 +47,7 @@ pipeline {
                 }
 
                 stage('Unit Test - Frontend') {
-                    agent {
-                        docker {
-                            image 'node:20-alpine'
-                            reuseNode true
-                        }
+                    agent any
                     }
                     steps {
                         dir('bugtracker-frontend') {
