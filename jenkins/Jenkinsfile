@@ -1,0 +1,79 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Execute Unit Tests') {
+            parallel {
+
+                stage('Unit Test - Backend') {
+                    agent {
+                        docker {
+                            image 'snakee/golang-junit:1.21'
+                            reuseNode true
+                            args '--dns 8.8.8.8 --dns 1.1.1.1'
+                        }
+                    }
+                    environment {
+                        GOCACHE    = "/tmp/go-build"
+                        GOMODCACHE = "/tmp/go-mod"
+                        GOFLAGS    = "-mod=vendor"
+                    }
+                    steps {
+                        dir('bugtracker-backend') {
+                            sh '''
+                                mkdir -p $GOCACHE $GOMODCACHE
+
+                                echo "== Go env =="
+                                go env | grep -E "GOCACHE|GOMODCACHE|GOPROXY"
+
+                                # Unit tests + JUnit
+                                go test -v ./... 2>&1 | go-junit-report > test-results.xml
+
+                                # Coverage
+                                go test -coverprofile=coverage.out -covermode=atomic ./...
+                                go tool cover -html=coverage.out -o coverage.html
+
+                                mkdir -p reports
+                                mv coverage.html reports/
+                            '''
+                            junit 'test-results.xml'
+                            publishHTML target: [
+                                reportDir: 'reports',
+                                reportFiles: 'coverage.html',
+                                reportName: 'Backend Coverage Report'
+                            ]
+                        }
+                    }
+                }
+
+                stage('Unit Test - Frontend') {
+                    agent {
+                        docker {
+                            image 'node:20-alpine'
+                            reuseNode true
+                        }
+                    }
+                    steps {
+                        dir('bugtracker-frontend') {
+                            sh '''
+                                docker build -t frontend-test .
+                                docker run --rm frontend-test
+                            '''
+                            publishHTML target: [
+                                reportDir: 'coverage',
+                                reportFiles: 'index.html',
+                                reportName: 'Frontend Coverage Report'
+                            ]
+                        }
+                    }
+                }
+
+            }
+        }
+    }
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}
